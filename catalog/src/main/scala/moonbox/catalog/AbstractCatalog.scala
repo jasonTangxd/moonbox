@@ -31,6 +31,79 @@ object AbstractCatalog {
 abstract class AbstractCatalog extends ListenerBus[CatalogEventListener, CatalogEvent] {
 
 	import AbstractCatalog._
+
+	// ----------------------------------------------------------------------------
+	// Cluster
+	// ----------------------------------------------------------------------------
+	final def createCluster(
+		clusterDefinition: CatalogCluster)(implicit by: User): Unit = {
+		postToAll(CreateClusterPreEvent(clusterDefinition.name))
+		doCreateCluster(clusterDefinition)
+		postToAll(CreateClusterEvent(clusterDefinition.name))
+	}
+
+	final def dropCluster(cluster: String, ignoreIfNotExists: Boolean)(implicit by: User): Unit = {
+		postToAll(DropClusterPreEvent(cluster))
+		doDropCluster(cluster, ignoreIfNotExists)
+		postToAll(DropClusterEvent(cluster))
+	}
+
+	protected def doCreateCluster(clusterDefinition: CatalogCluster)(implicit by: User): Unit
+
+	protected def doDropCluster(cluster: String, ignoreIfNotExists: Boolean)(implicit by: User): Unit
+
+	def alterCluster(clusterDefinition: CatalogCluster)(implicit by: User): Unit
+
+	def getCluster(cluster: String): CatalogCluster
+
+	def getClusterOption(cluster: String): Option[CatalogCluster]
+
+	def clusterExists(cluster: String): Boolean
+
+	def listClusters(): Seq[CatalogCluster]
+
+	def listClusters(pattern: String): Seq[CatalogCluster]
+
+	// ----------------------------------------------------------------------------
+	// Application
+	// ----------------------------------------------------------------------------
+	final def createApplication(
+		appDefinition: CatalogApplication, ignoreIfExists: Boolean)(implicit by: User): Unit = {
+		postToAll(CreateApplicationPreEvent(appDefinition.name))
+		doCreateApplication(appDefinition, ignoreIfExists)
+		postToAll(CreateApplicationEvent(appDefinition.name))
+	}
+
+	final def dropApplication(app: String, ignoreIfNotExists: Boolean)(implicit by: User): Unit = {
+		postToAll(DropApplicationPreEvent(app))
+		doDropApplication(app, ignoreIfNotExists)
+		postToAll(DropApplicationEvent(app))
+	}
+
+	protected def doCreateApplication(appDefinition: CatalogApplication, ignoreIfExists: Boolean)(implicit by: User): Unit
+
+	protected def doDropApplication(app: String, ignoreIfNotExists: Boolean)(implicit by: User): Unit
+
+	def alterApplication(appDefinition: CatalogApplication)(implicit by: User): Unit
+
+	def getApplication(app: String): CatalogApplication
+
+	def getApplicationOption(app: String): Option[CatalogApplication]
+
+	def applicationExists(app: String)(implicit by: User): Boolean
+
+	def applicationUsingClusterExists(cluster: String): Boolean
+
+	def listApplications()(implicit by: User): Seq[CatalogApplication]
+
+	def listApplications(pattern: String)(implicit by: User): Seq[CatalogApplication]
+
+	def listAllApplications(): Seq[CatalogApplication]
+
+	def listAllApplications(startOnBoot: Boolean): Seq[CatalogApplication]
+
+	def listApplicationsByCluster(cluster: String): Seq[CatalogApplication]
+
 	// ----------------------------------------------------------------------------
 	// Organization
 	// ----------------------------------------------------------------------------
@@ -244,6 +317,38 @@ abstract class AbstractCatalog extends ListenerBus[CatalogEventListener, Catalog
 	def listFunctions(database: String, pattern: String)(implicit by: User): Seq[CatalogFunction]
 
 	// ----------------------------------------------------------------------------
+	// Query -- belong to organization
+	// ----------------------------------------------------------------------------
+
+	final def createQuery(queryDefinition: CatalogQuery, ignoreIfExists: Boolean)(implicit by: User): Unit = {
+		postToAll(CreateQueryPreEvent(by.org, queryDefinition.name))
+		doCreateQuery(queryDefinition, ignoreIfExists)
+		postToAll(CreateQueryEvent(by.org, queryDefinition.name))
+	}
+
+	protected def doCreateQuery(queryDefinition: CatalogQuery, ignoreIfExists: Boolean)(implicit by: User): Unit
+
+	final def dropQuery(query: String, ignoreIfNotExists: Boolean)(implicit by: User): Unit = {
+		postToAll(DropQueryPreEvent(by.org, query))
+		doDropQuery(query, ignoreIfNotExists)
+		postToAll(DropQueryEvent(by.org, query))
+	}
+
+	protected def doDropQuery(query: String, ignoreIfNotExists: Boolean)(implicit by: User): Unit
+
+	def alterQuery(queryDefinition: CatalogQuery)(implicit by: User): Unit
+
+	def getQuery(query: String)(implicit by: User): CatalogQuery
+
+	def getQueryOption(query: String)(implicit by: User): Option[CatalogQuery]
+
+	def queryExists(query: String)(implicit by: User): Boolean
+
+	def listQueries()(implicit by: User): Seq[CatalogQuery]
+
+	def listQueries(pattern: String)(implicit by: User): Seq[CatalogQuery]
+
+	// ----------------------------------------------------------------------------
 	// Procedure -- belong to organization
 	// ----------------------------------------------------------------------------
 
@@ -318,6 +423,8 @@ abstract class AbstractCatalog extends ListenerBus[CatalogEventListener, Catalog
 	def getTimedEventOption(event: String)(implicit by: User): Option[CatalogTimedEvent]
 
 	def timedEventExists(event: String)(implicit by: User): Boolean
+
+	def timedEventExists(procId: Long)(implicit by: User): Boolean
 
 	def listTimedEvents()(implicit by: User): Seq[CatalogTimedEvent]
 
@@ -395,7 +502,75 @@ abstract class AbstractCatalog extends ListenerBus[CatalogEventListener, Catalog
 
 	protected def getColumnPrivilege(user: String, database: String, table: String)(implicit by: User): CatalogColumnPrivilege
 
-	override protected def doPostEvent(listener: CatalogEventListener, event: CatalogEvent): Unit = {
-		listener.onEvent(event)
+	// ----------------------------------------------------------------------------
+	// Group
+	// ----------------------------------------------------------------------------
+	final def createGroup(groupDefinition: CatalogGroup, ignoreIfExists: Boolean)(implicit by: User): Unit = {
+		postToAll(CreateGroupPreEvent(by.org, groupDefinition.name))
+		doCreateGroup(groupDefinition, ignoreIfExists)
+		postToAll(CreateGroupEvent(by.org, groupDefinition.name))
 	}
+
+	final def dropGroup(group: String, ignoreIfNotExists: Boolean, cascade: Boolean)(implicit by: User): Unit = {
+		postToAll(DropGroupPreEvent(by.org, group))
+		doDropGroup(group, ignoreIfNotExists, cascade)
+		postToAll(DropGroupEvent(by.org, group))
+	}
+
+	final def renameGroup(group: String, newGroup: String)(implicit by: User): Unit = {
+		postToAll(RenameGroupPreEvent(by.org, group, newGroup))
+		doRenameGroup(group, newGroup)
+		postToAll(RenameGroupPreEvent(by.org, group, newGroup))
+	}
+
+	protected def doRenameGroup(group: String, newGroup: String)(implicit by: User): Unit
+
+	protected def doCreateGroup(groupDefinition: CatalogGroup, ignoreIfExists: Boolean)(implicit by: User): Unit
+
+	protected def doDropGroup(group: String, ignoreIfNotExists: Boolean, cascade: Boolean)(implicit by: User): Unit
+
+	def alterGroup(groupDefinition: CatalogGroup)(implicit by: User): Unit
+
+	def getGroup(group: String)(implicit by: User): CatalogGroup
+
+	def getGroupOption(group: String)(implicit by: User): Option[CatalogGroup]
+
+	def groupExists(group: String)(implicit by: User): Boolean
+
+	def listGroups()(implicit by: User): Seq[CatalogGroup]
+
+	def listGroups(pattern: String)(implicit by: User): Seq[CatalogGroup]
+
+
+	final def createGroupUserRel(groupUserRel: CatalogGroupUserRel)(implicit by: User): Unit = {
+		postToAll(CreateGroupUserRelPreEvent(by.org, groupUserRel.group, groupUserRel.users))
+		doCreateGroupUserRel(groupUserRel)
+		postToAll(CreateGroupUserRelEvent(by.org, groupUserRel.group, groupUserRel.users))
+	}
+
+	protected def doCreateGroupUserRel(groupUserRels: CatalogGroupUserRel)(implicit by: User): Unit
+
+	final def dropGroupUserRel(groupUserRel: CatalogGroupUserRel)(implicit by: User): Unit = {
+		postToAll(DropGroupUserRelPreEvent(by.org, groupUserRel.group, groupUserRel.users))
+		doDropGroupUserRel(groupUserRel)
+		postToAll(DropGroupUserRelEvent(by.org, groupUserRel.group, groupUserRel.users))
+	}
+
+	protected def doDropGroupUserRel(groupUserRel: CatalogGroupUserRel)(implicit by: User): Unit
+
+	def listGroupUser(group: String)(implicit by: User): CatalogGroupUserRel
+
+	def listGroupUser(group: String, pattern: String)(implicit by: User): CatalogGroupUserRel
+
+
+  override protected def doPostEvent(listener: CatalogEventListener, event: CatalogEvent): Unit = {
+    listener.onEvent(event)
+  }
+
+	def listDatabasePrivileges()(implicit by: User): Seq[CatalogDatabasePrivilege]
+
+	def listTablePrivileges()(implicit by: User): Seq[CatalogTablePrivilege]
+
+	def listColumnPrivileges()(implicit by: User): Seq[CatalogColumnPrivilegeEntity]
+
 }

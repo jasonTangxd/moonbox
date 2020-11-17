@@ -180,8 +180,8 @@ object MoonboxRest {
 		case c :: tail if c.startsWith("-C") =>
 			c.stripPrefix("-C").split(",").foreach { keyvalues =>
 				val kv = keyvalues.trim.split("=")
-				assert(kv.length == 2, "please check config format.")
-				config.put(kv(0).trim, kv(1).trim)
+				assert(kv.length >= 2, "please check config format.")
+				config.put(kv(0).trim, keyvalues.substring(kv(0).length + 1).trim)
 			}
 		case Nil =>
 		case _ =>
@@ -196,10 +196,10 @@ object MoonboxRest {
 				"   -s            Connect to host:port.\n" +
 				"   -u            User for login.\n" +
 				"   -p            Password to use when connecting to server.\n" +
-				"   -l            Mql or hql to execute.\n" +
+				"   -l            Language to execute: MQL (\"mql\") or HQL (\"hql\").\n" +
 				"   -d            Current database, optional.\n" +
 				"   -f            MQL or HQL script file path.\n" +
-				"   -e 			  MQL with double quotes"
+				"   -e            MQL with double quotes."
 		)
 		System.exit(exitCode)
 	}

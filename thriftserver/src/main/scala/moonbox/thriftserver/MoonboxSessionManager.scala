@@ -21,9 +21,10 @@
 package moonbox.thriftserver
 
 import java.io.{PrintWriter, StringWriter}
+import java.sql.{Connection, DriverManager}
 import java.util
+import java.util.Properties
 
-import moonbox.client.{ClientOptions, MoonboxClient}
 import moonbox.common.MbLogging
 import moonbox.thriftserver.ReflectionUtils._
 import org.apache.hadoop.hive.conf.HiveConf
@@ -44,13 +45,32 @@ class MoonboxSessionManager(hiveConf: HiveConf, serverConf: mutable.Map[String, 
     initCompositeService(hiveConf)
   }
 
-  private def initMoonboxClient(sessionHandle: SessionHandle, sessionConf: java.util.Map[String, String], username: String, password: String) = {
-    logInfo("Initializing moonbox client ...")
+  private def initMoonboxConnection(sessionHandle: SessionHandle, sessionConf: java.util.Map[String, String], username: String, password: String) = {
+    logInfo("Initializing moonbox jdbc connection ...")
     val masterHost = serverConf.getOrElse(MOONBOX_SERVER_HOST_KEY, "localhost")
     val masterPort = serverConf.get(MOONBOX_SERVER_PORT_KEY).map(_.toInt).getOrElse(10010)
-    val clientOptions = ClientOptions.builder().options(Option(sessionConf).map(_.asScala.toMap).getOrElse(Map.empty)).user(username).password(password).host(masterHost).port(masterPort).isLocal(true).maxRows(50000000).build()
-    val client = MoonboxClient.builder(clientOptions).build()
-    moonboxSqlOperationManager.sessionHandleToMbClient.put(sessionHandle, client)
+    val url = s"jdbc:moonbox://$masterHost:$masterPort"
+    val parameterMap = SessionManager.getParameterMap
+    val properties = new Properties()
+    parameterMap.keySet().toArray.foreach(key => properties.setProperty(key.toString, parameterMap.get(key)))
+    properties.setProperty("user", username)
+    properties.setProperty("password", password)
+
+    var conn: Connection = null
+
+    try {
+      Class.forName("moonbox.jdbc.MbDriver")
+      conn = DriverManager.getConnection(url, properties)
+    } catch {
+      case ex: Exception =>
+        log.error("get moonbox jdbc connection failed", ex)
+        throw ex
+    } finally {
+      if (conn != null) {
+        conn.close()
+      }
+    }
+    moonboxSqlOperationManager.sessionHandleToMbJdbcConnection.put(sessionHandle, conn)
   }
 
   override def openSession(protocol: TProtocolVersion,
@@ -60,10 +80,11 @@ class MoonboxSessionManager(hiveConf: HiveConf, serverConf: mutable.Map[String, 
                            sessionConf: java.util.Map[String, String],
                            withImpersonation: Boolean,
                            delegationToken: String) = {
-    logInfo(s"Received openSession request from $ipAddress.")
-    logDebug(s"SessionConf: ${Option(sessionConf).map(_.asScala.toMap).getOrElse(Map.empty).mkString(", ")}")
+    logInfo(s"Received openSession request from $ipAddress, user $username.")
+    logInfo(s"SessionConf: ${Option(sessionConf).map(_.asScala.toMap).getOrElse(Map.empty).mkString(", ")}")
 
-    val session = new MoonboxSession(protocol, username, password, hiveConf, ipAddress)
+    val orgUsername = SessionManager.getOrg + "@" + username
+    val session = new MoonboxSession(protocol, orgUsername, password, hiveConf, ipAddress)
     session.setSessionManager(this)
     session.setOperationManager(moonboxSqlOperationManager)
     session.open(sessionConf)
@@ -73,7 +94,7 @@ class MoonboxSessionManager(hiveConf: HiveConf, serverConf: mutable.Map[String, 
 
     // initialize moonbox client
     try {
-      initMoonboxClient(sessionHandle, sessionConf, username, password)
+      initMoonboxConnection(sessionHandle, sessionConf, orgUsername, password)
     } catch {
       case e: Exception => throw new HiveSQLException(e.getMessage)
     }
@@ -82,7 +103,7 @@ class MoonboxSessionManager(hiveConf: HiveConf, serverConf: mutable.Map[String, 
 
   override def closeSession(sessionHandle: SessionHandle) {
     try
-      Option(moonboxSqlOperationManager.sessionHandleToMbClient.remove(sessionHandle)).foreach(_.close())
+      Option(moonboxSqlOperationManager.sessionHandleToMbJdbcConnection.remove(sessionHandle)).foreach(_.close())
     catch {
       case e: Exception =>
         val stringWriter = new StringWriter()

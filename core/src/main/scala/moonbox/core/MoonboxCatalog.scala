@@ -37,10 +37,28 @@ class MoonboxCatalog(val conf: MbConf) extends MbLogging {
 
 	var catalogOrg: CatalogOrganization = _
 
-	private var currentDb = formatDatabaseName(jdbcCatalog.defauleDb)
+	private var currentDb = formatDatabaseName(jdbcCatalog.defaultDb)
 
 	private def formatDatabaseName(db: String): String = {
 		db.toLowerCase(Locale.ROOT)
+	}
+
+	def requireDbExists(db: String): Unit = {
+		if (!databaseExists(db)) {
+			throw new NoSuchDatabaseException(db)
+		}
+	}
+
+	def requireTableExists(db: String, table: String) = {
+		if (!tableExists(db, table)) {
+			throw new NoSuchTableException(db, table)
+		}
+	}
+
+	def requireUserExists(org: String, user: String): Unit = {
+		if (!userExists(org, user)) {
+			throw new NoSuchUserException(user)
+		}
 	}
 
 	def setCurrentUser(org: String, user: String): this.type = synchronized {
@@ -154,6 +172,72 @@ class MoonboxCatalog(val conf: MbConf) extends MbLogging {
 		jdbcCatalog.listSas(pattern)
 	}
 
+	def createGroup(groupDefinition: CatalogGroup, ignoreIfExists: Boolean): Unit = {
+		jdbcCatalog.createGroup(groupDefinition, ignoreIfExists)
+	}
+
+	def renameGroup(group: String, newGroup: String): Unit = {
+		jdbcCatalog.renameGroup(group, newGroup)
+	}
+
+	def alterGroup(groupDefinition: CatalogGroup): Unit = {
+		jdbcCatalog.alterGroup(groupDefinition)
+	}
+
+	def groupExists(group: String): Boolean = {
+		jdbcCatalog.groupExists(group)
+	}
+
+	def dropGroup(group: String, ignoreIfNotExists: Boolean, cascade: Boolean): Unit = {
+		jdbcCatalog.dropGroup(group, ignoreIfNotExists, cascade)
+	}
+
+	def getGroup(group: String): CatalogGroup = {
+		jdbcCatalog.getGroup(group)
+	}
+
+	def getGroupOption(group: String): Option[CatalogGroup] = {
+		jdbcCatalog.getGroupOption(group)
+	}
+
+	def listGroups(): Seq[CatalogGroup] = {
+		jdbcCatalog.listGroups()
+	}
+
+	def listGroups(pattern: String): Seq[CatalogGroup] = {
+		jdbcCatalog.listGroups(pattern)
+	}
+
+	def listGroups(pattern: Option[String]): Seq[CatalogGroup] = {
+		pattern match {
+			case Some(p) => listGroups(p)
+			case None => listGroups()
+		}
+	}
+
+	def createGroupUserRel(groupUserRel: CatalogGroupUserRel): Unit = {
+		jdbcCatalog.createGroupUserRel(groupUserRel)
+	}
+
+	def deleteGroupUserRel(groupUserRel: CatalogGroupUserRel): Unit = {
+		jdbcCatalog.dropGroupUserRel(groupUserRel)
+	}
+
+	def listUserInGroup(group: String): Seq[String] = {
+		jdbcCatalog.listGroupUser(group).users
+	}
+
+	def listUserInGroup(group: String, pattern: String) = {
+		jdbcCatalog.listGroupUser(group, pattern)
+	}
+
+	def listUserInGroup(group: String, pattern: Option[String]) = {
+		pattern match {
+			case None => jdbcCatalog.listGroupUser(group).users
+			case Some(p) => jdbcCatalog.listGroupUser(group, p).users
+		}
+	}
+
 	def createDatabase(dbDefinition: CatalogDatabase, ignoreIfExists: Boolean): Unit = {
 		jdbcCatalog.createDatabase(dbDefinition, ignoreIfExists)
 	}
@@ -171,6 +255,10 @@ class MoonboxCatalog(val conf: MbConf) extends MbLogging {
 	}
 
 	def dropDatabase(database: String, ignoreIfNotExists: Boolean, cascade: Boolean): Unit = {
+		val dbName = formatDatabaseName(database)
+		if (dbName == JdbcCatalog.DEFAULT_DATABASE) {
+			throw new Exception(s"Can not drop default database")
+		}
 		jdbcCatalog.dropDatabase(database, ignoreIfNotExists, cascade)
 	}
 
@@ -269,41 +357,6 @@ class MoonboxCatalog(val conf: MbConf) extends MbLogging {
 		jdbcCatalog.listFunctions(database, pattern)
 	}
 
-	/*def alterView(viewDefinition: CatalogView): Unit = {
-		jdbcCatalog.alterView(viewDefinition)
-	}
-
-	def viewExists(database: String, view: String): Boolean = {
-		jdbcCatalog.viewExists(database, view)
-	}
-
-	def dropView(db: String, view: String, ignoreIfNotExists: Boolean): Unit = {
-		jdbcCatalog.dropView(db, view, ignoreIfNotExists)
-	}
-
-	def getView(database: String, view: String): CatalogView = {
-		jdbcCatalog.getView(database, view)
-	}
-
-	def getViewOption(database: String, view: String): Option[CatalogView] = {
-		jdbcCatalog.getViewOption(database, view)
-	}
-
-	def listViews(database: String, pattern: String): Seq[CatalogView] = {
-		jdbcCatalog.listViews(database, pattern)
-	}
-
-	def listViews(database: String): Seq[CatalogView] = {
-		jdbcCatalog.listViews(database)
-	}
-
-	def listViews(database: String, pattern: Option[String]): Seq[CatalogView] = {
-		pattern match {
-			case Some(p) => listViews(database, p)
-			case None => listViews(database)
-		}
-	}*/
-
 	def createProcedure(procDefinition: CatalogProcedure, ignoreIfExists: Boolean): Unit = {
 		jdbcCatalog.createProcedure(procDefinition, ignoreIfExists)
 	}
@@ -357,6 +410,10 @@ class MoonboxCatalog(val conf: MbConf) extends MbLogging {
 
 	def timedEventExists(event: String): Boolean = {
 		jdbcCatalog.timedEventExists(event)
+	}
+
+	def timedEventExists(procId: Long): Boolean = {
+		jdbcCatalog.timedEventExists(procId)
 	}
 
 	def dropTimedEvent(event: String, ignoreIfNotExists: Boolean): Unit = {

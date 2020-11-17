@@ -21,18 +21,16 @@
 package moonbox.application.interactive.spark
 
 import java.util.UUID
-import java.util.concurrent.{ExecutionException, Executors}
+import java.util.concurrent.Executors
 
 import akka.actor.{ActorRef, ActorSystem, Address, Cancellable, Props}
 import com.typesafe.config.ConfigFactory
 import moonbox.common.util.Utils
 import moonbox.common.{MbConf, MbLogging}
-import moonbox.core.MoonboxSession
+import moonbox.grid.config._
 import moonbox.grid.deploy.DeployMessages._
-import moonbox.grid.deploy.master.ApplicationType
 import moonbox.grid.deploy.messages.Message._
 import moonbox.grid.{LogMessage, MbActor}
-import moonbox.protocol.util.SchemaUtil
 import org.apache.spark.sql.SparkEngine
 
 import scala.collection.JavaConverters._
@@ -49,23 +47,28 @@ object Main extends MbLogging {
 
 		val driverId = conf.get("driverId").getOrElse(throw new NoSuchElementException("driverId"))
 		val masters = conf.get("masters").map(_.split(";")).getOrElse(throw new NoSuchElementException("masters"))
-		val appType = conf.get("applicationType").getOrElse(throw new NoSuchElementException("applicationType"))
-		val appLabel = conf.get("appLabel").getOrElse("common")
+		val appType = conf.get("appType").getOrElse(throw new NoSuchElementException("appType"))
 
-		val akkaConfig = Map(
-			"akka.jvm-exit-on-fatal-error" -> "true",
-			"akka.actor.provider" ->"akka.remote.RemoteActorRefProvider",
-			"akka.remote.enabled-transports.0" ->"akka.remote.netty.tcp",
-			"akka.remote.netty.tcp.hostname" -> Utils.localHostName(),
-			"akka.remote.netty.tcp.port" -> "0"
-		)
+		conf.set("moonbox.rpc.akka.remote.netty.tcp.hostname", Utils.localHostName())
+		conf.set("moonbox.rpc.akka.remote.netty.tcp.port", "0")
+
+		def akkaConfig: Map[String, String] = {
+			for { (key, value) <- AKKA_DEFAULT_CONFIG ++ AKKA_HTTP_DEFAULT_CONFIG ++ conf.getAll
+						if key.startsWith("moonbox.rpc.akka") || key.startsWith("moonbox.rest.akka")
+			} yield {
+				if (key.startsWith("moonbox.rpc.akka"))
+					(key.stripPrefix("moonbox.rpc."), value)
+				else
+					(key.stripPrefix("moonbox.rest."), value)
+			}
+		}
 
 		val akkaConf = ConfigFactory.parseMap(akkaConfig.asJava)
 		val system = ActorSystem("Moonbox", akkaConf)
 
 		try {
 			system.actorOf(Props(
-				classOf[Main], driverId, appLabel, masters, conf, ApplicationType.apply(appType)
+				classOf[Main], driverId, masters, conf, appType
 			), name = "interactive")
 		} catch {
 			case e: Exception =>
@@ -78,10 +81,9 @@ object Main extends MbLogging {
 
 class Main(
 	driverId: String,
-	appLabel: String,
 	masterAddresses: Array[String],
 	val conf: MbConf,
-	appType: ApplicationType
+	appType: String
 ) extends MbActor with LogMessage with MbLogging {
 
 	private implicit val executionContext: ExecutionContext = {
@@ -93,12 +95,10 @@ class Main(
 	private var connected = false
 	private var connectionAttemptCount = 0
 
-	private val sessionIdToRunner = new scala.collection.mutable.HashMap[String, Runner]
-
 	private var registerToMasterScheduler: Option[Cancellable] = None
 
-	private var dataFetchServer: Option[DataFetchServer] = None
-	private var dataFetchPort: Int = _
+	private var server: Option[SparkServer] = None
+	private var bindPort: Int = _
 
 	@scala.throws[Exception](classOf[Exception])
 	override def preStart(): Unit = {
@@ -115,8 +115,8 @@ class Main(
 		}
 
 		try {
-			dataFetchServer = Some(new DataFetchServer(host, 0, conf, sessionIdToRunner))
-			dataFetchPort = dataFetchServer.map(_.start()).get
+			server = Some(new SparkServer(host, new MbConf(), self))
+			bindPort = server.map(_.start()).get
 		} catch {
 			case e: Exception =>
 				logError("Could not start data fetch server.", e)
@@ -135,7 +135,7 @@ class Main(
 			changeMaster(masterRef, masterRef.path.address)
 			masterRef ! ApplicationStateResponse(driverId)
 
-		case open @ OpenSession(org, username, database, sessionConfig) =>
+		/*case open @ OpenSession(org, username, database, sessionConfig) =>
 			val requester = sender()
 			val sessionId = newSessionId
 			val f = Future(new Runner(sessionId, org, username, database, conf, sessionConfig, self))
@@ -144,7 +144,7 @@ class Main(
 					sessionIdToRunner.put(sessionId, runner)
 					logInfo(s"Open session successfully for $username, session id is $sessionId, current database set to ${database.getOrElse("default")} ")
 					logInfo(s"Current ${sessionIdToRunner.size} users online.")
-					requester ! OpenSessionResponse(Some(sessionId), Some(host), Some(dataFetchPort), "Open session successfully.")
+					requester ! OpenSessionResponse(Some(sessionId), Some(host), Some(bindPort), "Open session successfully.")
 				case Failure(e) =>
 					logError("open session error", e)
 					requester ! OpenSessionResponse(None, None, None, e.getMessage)
@@ -218,7 +218,7 @@ class Main(
 					val msg = s"Your session id $sessionId  is incorrect. Or it is lost in runner."
 					logWarning(msg)
 					sender() ! InteractiveJobCancelResponse(success = false, msg)
-			}
+			}*/
 
 		case event: RegisterTimedEvent =>
 			if (master.isDefined) {
@@ -303,11 +303,11 @@ class Main(
 					requester ! SchemaFailed(e.getMessage)
 			}
 
-		case lineage @ LineageRequest(org, username, sql, database) =>
+		case lineage @ LineageRequest(org, username, sqls, database) =>
 			val requester = sender()
 			Future {
 				val servicer = new Servicer(org, username, database, conf, self)
-				servicer.lineage(sql)
+				servicer.lineage(sqls)
 			}.onComplete {
 				case Success(response) =>
 					requester ! response
@@ -320,12 +320,9 @@ class Main(
 			logWarning(s"Unknown message received: $e")
 	}
 
-	private def newSessionId: String = {
-		UUID.randomUUID().toString
-	}
 
 	private def startComputeEnv(): Unit = {
-		SparkEngine.start(conf)
+		SparkEngine.start(conf, () => { logInfo("shutdown hook call") })
 	}
 
 	private def handleRegisterResponse(msg: RegisterApplicationResponse): Unit = {
@@ -386,12 +383,11 @@ class Main(
 		logInfo(s"Try registering with master $masterRpcAddress.")
 		context.system.actorSelection(masterRpcAddress).tell(RegisterApplication(
 			driverId,
-			appLabel,
 			host,
 			port,
 			self,
 			address,
-			dataFetchPort,
+			bindPort,
 			appType
 		), self)
 	}

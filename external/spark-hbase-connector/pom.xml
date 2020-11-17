@@ -128,6 +128,10 @@
             <version>1.1.2</version>
             <exclusions>
                 <exclusion>
+                    <groupId>org.apache.hadoop</groupId>
+                    <artifactId>hadoop-yarn-common</artifactId>
+                </exclusion>
+                <exclusion>
                     <groupId>jdk.tools</groupId>
                     <artifactId>jdk.tools</artifactId>
                 </exclusion>
@@ -172,12 +176,6 @@
             </exclusions>
         </dependency>
 
-        <!--<dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java</artifactId>
-            <version>2.5.0</version>
-            <scope>provided</scope>
-        </dependency>-->
         <dependency>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
@@ -257,9 +255,9 @@
         </plugins>
     </build>
 
-    <!--<profiles>
+    <profiles>
         <profile>
-            <id>hbase</id>
+            <id>hbase-filter</id>
             <activation>
                 <activeByDefault>false</activeByDefault>
             </activation>
@@ -301,7 +299,7 @@
             </build>
         </profile>
 
-    </profiles>-->
+    </profiles>
 
 
 </project>

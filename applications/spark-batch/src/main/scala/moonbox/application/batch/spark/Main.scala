@@ -22,10 +22,7 @@ package moonbox.application.batch.spark
 
 import moonbox.common.{MbConf, MbLogging}
 import moonbox.core._
-import moonbox.core.command.{InsertMode, _}
-import moonbox.core.datasys.DataSystem
-import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.catalyst.plans.logical.InsertIntoTable
+import moonbox.core.command._
 
 
 object Main extends MbLogging {
@@ -41,8 +38,8 @@ object Main extends MbLogging {
 				username = v
 			case (k, v) if k.equals("org") =>
 				org = v
-			case (k, v) if k.equals("sqls") =>
-				sqls = v.split(";")
+			case (k, v) if k.equals("script") =>
+				sqls = v.trim.stripSuffix(";").split(";")
 			case (k, v) =>
 				conf.set(k, v)
 		}
@@ -73,6 +70,7 @@ class Main(conf: MbConf, org: String, username: String, sqls: Seq[String]) {
 
 				case Statement(s) =>
 					mbSession.sql(s, 0)
+
 				case _ =>
 					throw new Exception("Unsupport command in batch mode")
 			}

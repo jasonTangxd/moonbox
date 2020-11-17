@@ -20,6 +20,7 @@
 
 package moonbox.grid.deploy
 
+
 trait Interface
 
 object Interface extends Interface {
@@ -94,8 +95,9 @@ object Interface extends Interface {
 
 	case class ResourceResult(success: Boolean, message: Option[String] = None, inputTables: Option[Seq[String]] = None, outputTable: Option[String] = None, functions: Option[Seq[String]] = None)
 
-	case class LineageInbound(username: String, password: String, sql: String, database: Option[String]) extends Outbound
-	case class LineageOutbound(success: Boolean, lineage: Option[String] = None, message: Option[String] = None) extends Outbound
+	case class LineageInbound(username: String, password: String, sqls: Seq[String], database: Option[String]) extends Inbound
+	case class Dag(dag_table: String, dag_col: String)
+	case class LineageOutbound(success: Boolean, dags: Option[Seq[Dag]] = None, message: Option[String] = None) extends Outbound
 
 	// management
 	case object ClusterInfoInbound extends Inbound
@@ -103,6 +105,21 @@ object Interface extends Interface {
 
 	case object AppsInfoInbound extends Inbound
 	case class AppsInfoOutbound(apps: Seq[Seq[String]]) extends Outbound
+
+	case class CreateAppInbound(token: String, name: String, appType: String, config: Map[String, String]) extends Inbound
+	case class CreateAppOutbound(success: Boolean, message: Option[String]) extends Outbound
+
+	case class DeleteAppInbound(token: String, name: String) extends Inbound
+	case class DeleteAppOutbound(success: Boolean, message: Option[String]) extends Outbound
+
+	case class UpdateAppInbound(token: String, name: String, config: Map[String, String]) extends Inbound
+	case class UpdateAppOutbound(success: Boolean, message: Option[String]) extends Outbound
+
+	case class StartAppInbound(token: String, name: String, worker: Option[String]) extends Inbound
+	case class StartAppOutbound(success: Boolean, message: Option[String]) extends Outbound
+
+	case class StopAppInbound(token: String, name: String) extends Inbound
+	case class StopAppOutbound(success: Boolean, message: Option[String]) extends Outbound
 }
 
 

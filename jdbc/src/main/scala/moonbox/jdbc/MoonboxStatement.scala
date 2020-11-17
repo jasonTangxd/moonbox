@@ -1,3 +1,4 @@
+/*
 /*-
  * <<
  * Moonbox
@@ -100,7 +101,7 @@ class MoonboxStatement(connection: MoonboxConnection) extends Statement {
   }
   override def getMaxRows = maxRows
   override def setMaxRows(max: Int) = {
-    if (max < 0) throw new SQLException("maxRows may not less than zero.")
+//    if (max < 0) throw new SQLException("maxRows may not less than zero.")
     if (max != 0) {
       maxRows = max
     }
@@ -122,7 +123,9 @@ class MoonboxStatement(connection: MoonboxConnection) extends Statement {
     executeQuery(sql)
     isResultSet
   }
-  override def getResultSet = resultSet
+  override def getResultSet = {
+    resultSet
+  }
   override def getUpdateCount = throw new SQLException("Unsupported")
   override def getMoreResults = false
   override def setFetchDirection(direction: Int) = {}
@@ -174,3 +177,4 @@ class MoonboxStatement(connection: MoonboxConnection) extends Statement {
   }
   override def isWrapperFor(iface: Class[_]) = iface != null && iface.isAssignableFrom(getClass)
 }
+*/

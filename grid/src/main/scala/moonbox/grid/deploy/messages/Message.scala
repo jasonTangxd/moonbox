@@ -20,6 +20,8 @@
 
 package moonbox.grid.deploy.messages
 
+import moonbox.grid.deploy.Interface.Dag
+
 
 sealed trait Message extends Serializable
 
@@ -103,10 +105,10 @@ object Message {
 	case class SchemaFailed(message: String) extends SchemaResponse
 	case class SchemaSuccessed(schema: String) extends SchemaResponse
 
-	case class LineageRequest(org: String, username: String, sql: String, database: Option[String]) extends ServiceMessage
+	case class LineageRequest(org: String, username: String, sqls: Seq[String], database: Option[String]) extends ServiceMessage
 	sealed trait LineageResponse extends ServiceMessage
 	case class LineageFailed(message: String) extends LineageResponse
-	case class LineageSuccessed(lineage: String) extends LineageResponse
+	case class LineageSuccessed(dags: Seq[Dag]) extends LineageResponse
 
 	// management
 	sealed trait ManagementMessage extends Message
@@ -114,4 +116,20 @@ object Message {
 	case class ClusterInfoResponse(cluster: Seq[Seq[String]]) extends ManagementMessage
 	case object AppsInfoRequest extends ManagementMessage
 	case class AppsInfoResponse(apps: Seq[Seq[String]]) extends ManagementMessage
+
+	case class CreateAppRequest(name: String, appType: String, config: Map[String, String]) extends ManagementMessage
+	case class CreateAppResponse(success: Boolean, message: Option[String]) extends ManagementMessage
+
+	case class UpdateAppRequest(name: String, config: Map[String, String]) extends ManagementMessage
+	case class UpdateAppResponse(success: Boolean, message: Option[String]) extends ManagementMessage
+
+	case class DeleteAppRequest(name: String) extends ManagementMessage
+	case class DeleteAppResponse(success: Boolean, message: Option[String]) extends ManagementMessage
+
+	case class StartAppRequest(name: String, worker: Option[String]) extends ManagementMessage
+	case class StartAppResponse(success: Boolean, message: Option[String]) extends ManagementMessage
+
+	case class StopAppRequest(name: String) extends ManagementMessage
+	case class StopAppResponse(success: Boolean, message: Option[String]) extends ManagementMessage
+
 }

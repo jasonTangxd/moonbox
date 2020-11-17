@@ -70,7 +70,7 @@
         </dependency>
         <dependency>
             <groupId>edp.moonbox</groupId>
-            <artifactId>moonbox-client_2.11</artifactId>
+            <artifactId>moonbox-jdbc_2.11</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
@@ -137,6 +137,16 @@
                 <dependency>
                     <groupId>edp.moonbox</groupId>
                     <artifactId>moonbox-sqlserver-adapter</artifactId>
+                    <version>${project.version}</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>postgres</id>
+            <dependencies>
+                <dependency>
+                    <groupId>edp.moonbox</groupId>
+                    <artifactId>moonbox-postgres-adapter</artifactId>
                     <version>${project.version}</version>
                 </dependency>
             </dependencies>
